@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Isometric Cube of Cubes</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene
+        const scene = new THREE.Scene();
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(30, 25, 30);
+        camera.lookAt(0, 15, 0);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xabcdef);
+        document.body.appendChild(renderer.domElement);
+
+        // Cube dimensions
+        const cubeSize = 2.5;
+        const cubeCount = 15;
+        var similarFrames = 0;
+
+        var grid = [];
+        for (let x = 0; x < cubeCount; x++) {
+            grid[x] = [];
+            for (let y = 0; y < cubeCount; y++) {
+                grid[x][y] = Math.round(Math.random()); // Randomly set to 0 or 1
+            }
+        }
+
+        const cubes = [];
+        for (let z = 0; z < cubeCount; z++) {
+            cubes[z] = [];
+            for (let x = 0; x < cubeCount; x++) {
+                cubes[z][x] = [];
+                for (let y = -2 * cubeCount; y < cubeCount; y++) {
+                    const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                    const material = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: grid[x][z] && y === cubeCount - 1 });
+                    const cube = new THREE.Mesh(geometry, material);
+                    cube.position.set(x * cubeSize - (cubeCount / 2) * cubeSize, y * cubeSize - (cubeCount / 2) * cubeSize, z * cubeSize - (cubeCount / 2) * cubeSize);
+                    scene.add(cube);
+                    cubes[z][x][y] = cube;
+                }
+            }
+        }
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(-1, 1.5, 1); // from top left
+        scene.add(directionalLight);
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function toggleCubeVisibility(cube) {
+            cube.material.opacity = cube.material.opacity == 1 ? 0 : 1;
+        }
+
+        function moveCubesDown() {
+            for (let z = 0; z < cubeCount; z++) {
+                for (let x = 0; x < cubeCount; x++) {
+                    for (let y = -2 * cubeCount; y < cubeCount - 1; y++) {
+                        let cubeAbove = cubes[z][x][y + 1];
+                        let cube = cubes[z][x][y];
+                        //console.log(cube, cubeAbove)
+                        if (cube.material.opacity != cubeAbove.material.opacity) {
+                            toggleCubeVisibility(cube);
+                        }
+                    }
+                }
+            }
+        }
+        var previos2Grid = JSON.parse(JSON.stringify(grid));
+        function updateGrid() {
+            // Create an empty array to store the new grid state
+            let newGrid = [];
+            for (let x = 0; x < cubeCount; x++) {
+                newGrid[x] = [];
+                for (let z = 0; z < cubeCount; z++) {
+                    // do Conway's Game of Life
+                    let liveNeighbors = 0;
+                    for (let dx = -1; dx <= 1; dx++) {
+                        for (let dz = -1; dz <= 1; dz++) {
+                            if (dx === 0 && dz === 0) continue;
+                            let neighborX = x + dx;
+                            let neighborZ = z + dz;
+                            if (neighborX < 0 || neighborX >= cubeCount || neighborZ < 0 || neighborZ >= cubeCount) continue;
+                            if (grid[neighborX][neighborZ] === 1) {
+                                liveNeighbors++;
+                            }
+                        }
+                    }
+                    if (grid[x][z] === 1) {
+                        if (liveNeighbors < 2 || liveNeighbors > 3) {
+                            newGrid[x][z] = 0;
+                        } else {
+                            newGrid[x][z] = 1;
+                        }
+                    } else {
+                        if (liveNeighbors === 3) {
+                            newGrid[x][z] = 1;
+                        } else {
+                            newGrid[x][z] = 0;
+                        }
+                    }
+                }
+            }
+
+            // Update the grid with the new state
+            if (JSON.stringify(newGrid) === JSON.stringify(grid) || previos2Grid === JSON.stringify(newGrid)) {
+                similarFrames += 1
+            }
+            previos2Grid = JSON.stringify(grid);
+            grid = newGrid;
+
+            // Update the cubes
+            for (let z = 0; z < cubeCount; z++) {
+                for (let x = 0; x < cubeCount; x++) {
+                    cubes[z][x][cubeCount - 1].material.opacity = grid[x][z];
+                }
+            }
+        }
+
+
+
+        // Animation loop
+        let speed = 10;
+        function animate() {
+            let num = requestAnimationFrame(animate);
+
+            // move all cubes down by 0.1
+            for (let z = 0; z < cubeCount; z++) {
+                for (let x = 0; x < cubeCount; x++) {
+                    for (let y = -cubeCount; y < cubeCount; y++) {
+                        cubes[z][x][y].position.y -= cubeSize/speed;
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+            if (num % speed === 0) {
+                for (let z = 0; z < cubeCount; z++) {
+                    for (let x = 0; x < cubeCount; x++) {
+                        for (let y = -cubeCount; y < cubeCount; y++) {
+                            cubes[z][x][y].position.y += cubeSize;
+                        }
+                    }
+                }
+                moveCubesDown();
+                updateGrid();
+                if (similarFrames > 10) {
+                    // reset the grid with random values
+                    for (let x = 0; x < cubeCount; x++) {
+                        for (let z = 0; z < cubeCount; z++) {
+                            grid[x][z] = Math.round(Math.random()); // Randomly set to 0 or 1
+                        }
+                    }
+                    similarFrames = 0;
+                    updateCubes();
+                }
+            }
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>
